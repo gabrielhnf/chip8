@@ -1,4 +1,5 @@
 use std::time::Duration;
+use super::Chip8;
 
 pub struct Hertz {
     period: Duration,
@@ -18,5 +19,17 @@ impl Hertz {
     }
 }
 
-pub struct Logger {
+impl Chip8 {
+    pub fn set_clock(&mut self, freq: u64) {
+        self.clock_rate.set_frequency(freq);
+    }
+
+    pub(crate) fn log_state(&self) {
+        println!();
+        println!("PC: {:#06X}", self.program_counter);
+        println!("V:  {:?}", self.register); // your registers array
+        println!("I:  {:#06X}", self.index_register);
+        println!("SP: {}", self.stack_pointer);
+        println!();
+    }
 }
