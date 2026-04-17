@@ -13,6 +13,7 @@ pub struct Chip8 {
     pub(crate) program_counter: u16,
     pub(crate) ram: [u16; 2048],
     pub(crate) clock_rate: Hertz,
+    pub(crate) keypad: [bool; 16],
 }
 
 impl Chip8 {
@@ -27,6 +28,7 @@ impl Chip8 {
             program_counter: 0,
             ram: [0; 2048],
             clock_rate: Hertz::new(600),
+            keypad: [false; 16],
         }
     }
 
@@ -36,59 +38,103 @@ impl Chip8 {
             //decode -> decode instruction (using match)
             //execute -> execute it inside proper match arm
             self.log_state();
-            let instruction = self.get_instruction();
-            match instruction & 0xF000 {
 
+            let instruction = self.get_instruction();
+            self.program_counter += 1;
+
+            match instruction & 0xF000 {
                 0x0000 => match instruction & 0x0FFF {
                     0x00E0 => {
                         self.cls();
-                        self.program_counter += 1;
                     },
                     0x00EE => self.ret(),
-                    0x0000 => break, //Should throw or exit, SYS not supported.
+                    0x0000 => break,
                     _ => {}
                 },
-
                 0x1000 => self.jmp(instruction & 0x0FFF),
                 0x2000 => self.call(instruction & 0x0FFF),
-
                 0x3000 => {
-                    let reg_index = ((instruction & 0x0F00) >> 8) as u8;
-                    let byte = (instruction & 0x00FF) as u8;
-                    self.se(reg_index, byte);
-                    self.program_counter += 1;
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let kk = (instruction & 0x00FF) as u8;
+                    self.se_vx(x, kk);
                 },
-
                 0x4000 => {
-                    let reg_index = ((instruction & 0x0F00) >> 8) as u8;
-                    let byte = (instruction & 0x00FF) as u8;
-                    self.sne(reg_index, byte);
-                    self.program_counter += 1;
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let kk = (instruction & 0x00FF) as u8;
+                    self.sne_vx(x, kk);
                 },
-
                 0x5000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as u8;
-                    let y = ((instruction & 0x00F0) >> 4) as u8;
-                    self.ser(x, y);
-                    self.program_counter += 1;
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let y = ((instruction & 0x00F0) >> 4) as usize;
+                    self.se_vx_vy(x, y);
                 },
-
                 0x6000 => {
-                    let reg_index = ((instruction & 0x0F00) >> 8) as u8;
-                    let byte = (instruction & 0x00FF) as u8;
-                    self.ld(reg_index, byte);
-                    self.program_counter += 1;
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let kk = (instruction & 0x00FF) as u8;
+                    self.ld_vx_byte(x, kk);
                 },
-
-                0x7000 => {},
-                0x8000 => {},
-                0x9000 => {},
-                0xA000 => {},
-                0xB000 => {},
-                0xC000 => {},
-                0xD000 => {},
-                0xE000 => {},
-                0xF000 => {},
+                0x7000 => {
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let kk = (instruction & 0x00FF) as u8;
+                    self.add_vx_byte(x, kk);
+                },
+                0x8000 => {
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let y = ((instruction & 0x00F0) >> 4) as usize;
+                    match instruction & 0x000F {
+                        0x0000 => self.ld_vx_vy(x, y),
+                        0x0001 => self.or_vx_vy(x, y),
+                        0x0002 => self.and_vx_vy(x, y),
+                        0x0003 => self.xor_vx_vy(x, y),
+                        0x0004 => self.add_vx_vy(x, y),
+                        0x0005 => self.sub_vx_vy(x, y),
+                        0x0006 => self.shr_vx(x),
+                        0x0007 => self.subn_vx_vy(x, y),
+                        0x000E => self.shl_vx(x),
+                        _ => {}
+                    }
+                },
+                0x9000 => {
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let y = ((instruction & 0x00F0) >> 4) as usize;
+                    self.sne_vx_vy(x, y);
+                },
+                0xA000 => self.ld_i_addr(instruction & 0x0FFF),
+                0xB000 => self.jp_v0_addr(instruction & 0x0FFF),
+                0xC000 => {
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let kk = (instruction & 0x00FF) as u8;
+                    self.rnd_vx_byte(x, kk);
+                },
+                0xD000 => {
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    let y = ((instruction & 0x00F0) >> 4) as usize;
+                    let n = (instruction & 0x000F) as u8;
+                    self.drw_vx_vy_nibble(x, y, n);
+                },
+                0xE000 => {
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    match instruction & 0x00FF {
+                        0x009E => self.skp_vx(x),
+                        0x00A1 => self.sknp_vx(x),
+                        _ => {}
+                    }
+                },
+                0xF000 => {
+                    let x = ((instruction & 0x0F00) >> 8) as usize;
+                    match instruction & 0x00FF {
+                        0x0007 => self.ld_vx_dt(x),
+                        0x000A => self.ld_vx_k(x),
+                        0x0015 => self.ld_dt_vx(x),
+                        0x0018 => self.ld_st_vx(x),
+                        0x001E => self.add_i_vx(x),
+                        0x0029 => self.ld_f_vx(x),
+                        0x0033 => self.ld_b_vx(x),
+                        0x0055 => self.ld_i_vx(x),
+                        0x0065 => self.ld_vx_i(x),
+                        _ => {}
+                    }
+                },
                 _ => {}
             }
             
