@@ -1,4 +1,6 @@
 use std::thread::sleep;
+use minifb::{Window, WindowOptions};
+
 use super::utils::Hertz;
 
 
@@ -11,9 +13,10 @@ pub struct Chip8 {
     pub(crate) delay_timer: u8,
     pub(crate) sound_timer: u8,
     pub(crate) program_counter: u16,
-    pub(crate) ram: [u16; 2048],
+    pub(crate) ram: [u8; 4096],
     pub(crate) clock_rate: Hertz,
     pub(crate) keypad: [bool; 16],
+    pub(crate) display: [bool; 2048],
 }
 
 impl Chip8 {
@@ -26,13 +29,19 @@ impl Chip8 {
             delay_timer: 0,
             sound_timer: 0,
             program_counter: 0,
-            ram: [0; 2048],
+            ram: [0; 4096],
             clock_rate: Hertz::new(600),
             keypad: [false; 16],
+            display: [false; 2048],
         }
     }
 
     pub fn start_program(&mut self) { //Will assume program loaded
+        let mut window = Window::new("CHIP-8", 64, 32, WindowOptions {
+            scale: minifb::Scale::X8,
+            ..WindowOptions::default()
+        }).unwrap();
+
         loop {
             //fetch -> read instruction from memory (2-byte instruction)
             //decode -> decode instruction (using match)
@@ -40,7 +49,7 @@ impl Chip8 {
             self.log_state();
 
             let instruction = self.get_instruction();
-            self.program_counter += 1;
+            self.program_counter += 2;
 
             match instruction & 0xF000 {
                 0x0000 => match instruction & 0x0FFF {
@@ -137,7 +146,12 @@ impl Chip8 {
                 },
                 _ => {}
             }
-            
+
+            let framebuffer: Vec<u32> = self.display.iter().map(|&px| {
+                if px { 0xFFFFFFFF } else { 0x00000000 }
+            }).collect();
+
+            window.update_with_buffer(&framebuffer, 64, 32).unwrap();
             sleep(self.clock_rate.period());
         }
     }
@@ -146,7 +160,10 @@ impl Chip8 {
         //Read rom into ram from 0x200 (maybe rom will be array of u16)
         let offset = 0x200;
         for (index, instruction) in rom.iter().enumerate() {
-            self.ram[offset + index] = *instruction;
+            let low_bits = *instruction as u8;
+            let high_bits = ((*instruction) >> 8) as u8;
+            self.ram[offset + 2*index] = high_bits;
+            self.ram[offset + 2*index + 1] = low_bits;
         }
         //Set PC to 0x200
         self.program_counter = offset as u16;

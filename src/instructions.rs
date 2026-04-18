@@ -2,7 +2,10 @@ use super::Chip8;
 
 impl Chip8 {
     pub(crate) fn get_instruction(&mut self) -> u16 {
-        self.ram[self.program_counter as usize]
+        let instruction: u16 = (self.ram[self.program_counter as usize] as u16) << 8 |
+            (self.ram[self.program_counter as usize + 1] as u16); 
+        
+        instruction
     }
 
     pub(crate) fn cls(&mut self) {
@@ -25,19 +28,19 @@ impl Chip8 {
 
     pub(crate) fn se_vx(&mut self, x: usize, byte: u8) {
         if self.register[x] == byte {
-            self.program_counter += 1;
+            self.program_counter += 2;
         }
     }
 
     pub(crate) fn sne_vx(&mut self, x: usize, byte: u8) {
         if self.register[x] != byte {
-            self.program_counter += 1;
+            self.program_counter += 2;
         }
     }
 
     pub(crate) fn se_vx_vy(&mut self, x: usize, y: usize) {
         if self.register[x] == self.register[y] {
-            self.program_counter += 1;
+            self.program_counter += 2;
         }
     }
 
@@ -101,7 +104,7 @@ impl Chip8 {
     // 9xy0 - SNE Vx, Vy
     pub(crate) fn sne_vx_vy(&mut self, x: usize, y: usize) {
         if self.register[x] != self.register[y] {
-            self.program_counter += 1;
+            self.program_counter += 2;
         }
     }
 
@@ -133,10 +136,10 @@ impl Chip8 {
                     let idx = (py * 64 + px) as usize;
                     // NOTE: you'll want a separate display buffer here, not ram
                     // this is a placeholder
-                    if self.ram[idx] == 1 {
+                    if self.display[idx] {
                         self.register[0xF] = 1;
                     }
-                    self.ram[idx] ^= 1;
+                    self.display[idx] ^= true;
                 }
             }
         }
@@ -145,14 +148,14 @@ impl Chip8 {
     // Ex9E - SKP Vx
     pub(crate) fn skp_vx(&mut self, x: usize) {
         if self.keypad[self.register[x] as usize] {
-            self.program_counter += 1;
+            self.program_counter += 2;
         }
     }
 
     // ExA1 - SKNP Vx
     pub(crate) fn sknp_vx(&mut self, x: usize) {
         if !self.keypad[self.register[x] as usize] {
-            self.program_counter += 1;
+            self.program_counter += 2;
         }
     }
 
@@ -165,7 +168,7 @@ impl Chip8 {
     pub(crate) fn ld_vx_k(&mut self, x: usize) {
         match self.keypad.iter().position(|&k| k) {
             Some(key) => self.register[x] = key as u8,
-            None => self.program_counter -= 1, // re-execute this instruction
+            None => self.program_counter -= 2, // re-execute this instruction
         }
     }
 
@@ -192,15 +195,15 @@ impl Chip8 {
     // Fx33 - LD B, Vx
     pub(crate) fn ld_b_vx(&mut self, x: usize) {
         let vx = self.register[x];
-        self.ram[self.index_register as usize]       = (vx / 100) as u16;
-        self.ram[self.index_register as usize + 1]   = ((vx % 100) / 10) as u16;
-        self.ram[self.index_register as usize + 2]   = (vx % 10) as u16;
+        self.ram[self.index_register as usize]       = (vx / 100);
+        self.ram[self.index_register as usize + 1]   = ((vx % 100) / 10);
+        self.ram[self.index_register as usize + 2]   = (vx % 10);
     }
 
     // Fx55 - LD [I], Vx
     pub(crate) fn ld_i_vx(&mut self, x: usize) {
         for i in 0..=x {
-            self.ram[self.index_register as usize + i] = self.register[i] as u16;
+            self.ram[self.index_register as usize + i] = self.register[i];
         }
         self.index_register += x as u16 + 1;
     }
