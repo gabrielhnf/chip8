@@ -1,4 +1,4 @@
-# chip8-rs
+# chip8
 
 A CHIP-8 emulator written in Rust.
 
@@ -23,8 +23,8 @@ CHIP-8 is an interpreted virtual machine from the 1970s, originally designed to 
 ## Building
 
 ```bash
-git clone https://github.com/yourname/chip8-rs
-cd chip8-rs
+git clone https://github.com/gabrielhnf/chip8
+cd chip8
 cargo build --release
 ```
 
@@ -46,13 +46,13 @@ cargo run --release -- <rom_path> [--clock <hz>] [--log]
 
 ```bash
 # Run a ROM at default speed
-cargo run --release -- roms/spaceinvaders.ch8
+cargo run --release -- programs/spaceinvaders.ch8
 
 # Run at a higher clock rate
-cargo run --release -- roms/spaceinvaders.ch8 --clock 1000
+cargo run --release -- programs/spaceinvaders.ch8 --clock 1000
 
 # Run with debug logging
-cargo run --release -- roms/test.ch8 --log
+cargo run --release -- programs/test.ch8 --log
 ```
 
 ## Keypad Mapping
