@@ -80,32 +80,38 @@ impl Chip8 {
     // 8xy4 - ADD Vx, Vy
     pub(crate) fn add_vx_vy(&mut self, x: usize, y: usize) {
         let result = self.register[x] as u16 + self.register[y] as u16;
-        self.register[0xF] = if result > 0xFF { 1 } else { 0 };
         self.register[x] = result as u8;
+        self.register[0xF] = if result > 0xFF { 1 } else { 0 };
     }
-
+    
     // 8xy5 - SUB Vx, Vy
     pub(crate) fn sub_vx_vy(&mut self, x: usize, y: usize) {
-        self.register[0xF] = if self.register[x] > self.register[y] { 1 } else { 0 };
-        self.register[x] = self.register[x].wrapping_sub(self.register[y]);
+        let vx = self.register[x];
+        let vy = self.register[y];
+        self.register[x] = vx.wrapping_sub(vy);
+        self.register[0xF] = if vx >= vy { 1 } else { 0 };
     }
-
+    
     // 8xy6 - SHR Vx
-    pub(crate) fn shr_vx(&mut self, x: usize) {
-        self.register[0xF] = self.register[x] & 0x1;
-        self.register[x] >>= 1;
+    pub(crate) fn shr_vx(&mut self, x: usize, y: usize) {
+        let vy = self.register[y];
+        self.register[x] = vy >> 1;
+        self.register[0xF] = vy & 0x1;
     }
-
+    
     // 8xy7 - SUBN Vx, Vy
     pub(crate) fn subn_vx_vy(&mut self, x: usize, y: usize) {
-        self.register[0xF] = if self.register[y] > self.register[x] { 1 } else { 0 };
-        self.register[x] = self.register[y].wrapping_sub(self.register[x]);
+        let vx = self.register[x];
+        let vy = self.register[y];
+        self.register[x] = vy.wrapping_sub(vx);
+        self.register[0xF] = if vy >= vx { 1 } else { 0 };
     }
-
+    
     // 8xyE - SHL Vx
-    pub(crate) fn shl_vx(&mut self, x: usize) {
-        self.register[0xF] = (self.register[x] & 0x80) >> 7;
-        self.register[x] <<= 1;
+    pub(crate) fn shl_vx(&mut self, x: usize, y: usize) {
+        let vy = self.register[y];
+        self.register[x] = vy << 1;
+        self.register[0xF] = (vy & 0x80) >> 7;
     }
 
     // 9xy0 - SNE Vx, Vy
@@ -133,16 +139,22 @@ impl Chip8 {
 
     // Dxyn - DRW Vx, Vy, nibble
     pub(crate) fn drw_vx_vy_nibble(&mut self, x: usize, y: usize, n: u8) {
+        self.draw_flag = false;
         self.register[0xF] = 0;
+        let x_start = (self.register[x] % 64) as u16;  // wrap starting position
+        let y_start = (self.register[y] % 32) as u16;  // wrap starting position
+    
         for byte_idx in 0..n as u16 {
-            let sprite_byte = self.ram[(self.index_register + byte_idx) as usize] as u8;
-            for bit in 0..8 {
+            let py = y_start + byte_idx;
+            if py >= 32 { break; } // clip, don't wrap
+    
+            let sprite_byte = self.ram[(self.index_register + byte_idx) as usize];
+            for bit in 0..8u16 {
+                let px = x_start + bit;
+                if px >= 64 { break; } // clip, don't wrap
+    
                 if sprite_byte & (0x80 >> bit) != 0 {
-                    let px = (self.register[x] as u16 + bit) % 64;
-                    let py = (self.register[y] as u16 + byte_idx) % 32;
                     let idx = (py * 64 + px) as usize;
-                    // NOTE: you'll want a separate display buffer here, not ram
-                    // this is a placeholder
                     if self.display[idx] {
                         self.register[0xF] = 1;
                     }
@@ -150,6 +162,8 @@ impl Chip8 {
                 }
             }
         }
+
+        self.draw_flag = true;
     }
 
     // Ex9E - SKP Vx

@@ -1,4 +1,4 @@
-use std::{fs, thread::sleep};
+use std::{fs, thread::sleep, time::Duration};
 use super::utils::{Hertz, Timer};
 
 #[allow(dead_code)]
@@ -23,6 +23,7 @@ pub struct Chip8 {
     pub(crate) render: Box<dyn FnMut(&[bool; 2048], &mut [bool; 16])>,
 
     pub debug: bool,
+    pub(crate) draw_flag: bool,
 }
 
 const FONT: [u8; 80] = [
@@ -67,6 +68,7 @@ impl Chip8 {
             render: Box::new(|_,_| {}),
 
             debug: false,
+            draw_flag: false,
         };
 
         chip.ram[0x000..0x050].copy_from_slice(&FONT);
@@ -94,116 +96,124 @@ impl Chip8 {
     }
 
     pub fn start_program(&mut self) { //Will assume program loaded
+        const CYCLES_PER_FRAME: u32 = 10;
         loop {
-            //self.log_state();
+            for _ in 0..CYCLES_PER_FRAME {
 
-            let instruction = self.get_instruction();
-            self.program_counter += 2;
+                if self.draw_flag {
+                    break; //wait until next frame
+                }
 
-            if self.debug {
-                println!("Instruction: {:#06X}", instruction);
-                self.log_state();
-            }
+                let instruction = self.get_instruction();
+                self.program_counter += 2;
 
-            match instruction & 0xF000 {
-                0x0000 => match instruction & 0x0FFF {
-                    0x00E0 => {
-                        self.cls();
+                if self.debug {
+                    println!("Instruction: {:#06X}", instruction);
+                    self.log_state();
+                }
+
+                match instruction & 0xF000 {
+                    0x0000 => match instruction & 0x0FFF {
+                        0x00E0 => {
+                            self.cls();
+                        },
+                        0x00EE => self.ret(),
+                        0x0000 => break,
+                        _ => {}
                     },
-                    0x00EE => self.ret(),
-                    0x0000 => break,
-                    _ => {}
-                },
-                0x1000 => self.jmp(instruction & 0x0FFF),
-                0x2000 => self.call(instruction & 0x0FFF),
-                0x3000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let kk = (instruction & 0x00FF) as u8;
-                    self.se_vx(x, kk);
-                },
-                0x4000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let kk = (instruction & 0x00FF) as u8;
-                    self.sne_vx(x, kk);
-                },
-                0x5000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let y = ((instruction & 0x00F0) >> 4) as usize;
-                    self.se_vx_vy(x, y);
-                },
-                0x6000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let kk = (instruction & 0x00FF) as u8;
-                    self.ld_vx_byte(x, kk);
-                },
-                0x7000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let kk = (instruction & 0x00FF) as u8;
-                    self.add_vx_byte(x, kk);
-                },
-                0x8000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let y = ((instruction & 0x00F0) >> 4) as usize;
-                    match instruction & 0x000F {
-                        0x0000 => self.ld_vx_vy(x, y),
-                        0x0001 => self.or_vx_vy(x, y),
-                        0x0002 => self.and_vx_vy(x, y),
-                        0x0003 => self.xor_vx_vy(x, y),
-                        0x0004 => self.add_vx_vy(x, y),
-                        0x0005 => self.sub_vx_vy(x, y),
-                        0x0006 => self.shr_vx(x),
-                        0x0007 => self.subn_vx_vy(x, y),
-                        0x000E => self.shl_vx(x),
-                        _ => {}
-                    }
-                },
-                0x9000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let y = ((instruction & 0x00F0) >> 4) as usize;
-                    self.sne_vx_vy(x, y);
-                },
-                0xA000 => self.ld_i_addr(instruction & 0x0FFF),
-                0xB000 => self.jp_v0_addr(instruction & 0x0FFF),
-                0xC000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let kk = (instruction & 0x00FF) as u8;
-                    self.rnd_vx_byte(x, kk);
-                },
-                0xD000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    let y = ((instruction & 0x00F0) >> 4) as usize;
-                    let n = (instruction & 0x000F) as u8;
-                    self.drw_vx_vy_nibble(x, y, n);
-                },
-                0xE000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    match instruction & 0x00FF {
-                        0x009E => self.skp_vx(x),
-                        0x00A1 => self.sknp_vx(x),
-                        _ => {}
-                    }
-                },
-                0xF000 => {
-                    let x = ((instruction & 0x0F00) >> 8) as usize;
-                    match instruction & 0x00FF {
-                        0x0007 => self.ld_vx_dt(x),
-                        0x000A => self.ld_vx_k(x),
-                        0x0015 => self.ld_dt_vx(x),
-                        0x0018 => self.ld_st_vx(x),
-                        0x001E => self.add_i_vx(x),
-                        0x0029 => self.ld_f_vx(x),
-                        0x0033 => self.ld_b_vx(x),
-                        0x0055 => self.ld_i_vx(x),
-                        0x0065 => self.ld_vx_i(x),
-                        _ => {}
-                    }
-                },
-                _ => panic!("unknown opcode {:#06X}", instruction)
+                    0x1000 => self.jmp(instruction & 0x0FFF),
+                    0x2000 => self.call(instruction & 0x0FFF),
+                    0x3000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let kk = (instruction & 0x00FF) as u8;
+                        self.se_vx(x, kk);
+                    },
+                    0x4000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let kk = (instruction & 0x00FF) as u8;
+                        self.sne_vx(x, kk);
+                    },
+                    0x5000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let y = ((instruction & 0x00F0) >> 4) as usize;
+                        self.se_vx_vy(x, y);
+                    },
+                    0x6000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let kk = (instruction & 0x00FF) as u8;
+                        self.ld_vx_byte(x, kk);
+                    },
+                    0x7000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let kk = (instruction & 0x00FF) as u8;
+                        self.add_vx_byte(x, kk);
+                    },
+                    0x8000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let y = ((instruction & 0x00F0) >> 4) as usize;
+                        match instruction & 0x000F {
+                            0x0000 => self.ld_vx_vy(x, y),
+                            0x0001 => self.or_vx_vy(x, y),
+                            0x0002 => self.and_vx_vy(x, y),
+                            0x0003 => self.xor_vx_vy(x, y),
+                            0x0004 => self.add_vx_vy(x, y),
+                            0x0005 => self.sub_vx_vy(x, y),
+                            0x0006 => self.shr_vx(x, y),
+                            0x0007 => self.subn_vx_vy(x, y),
+                            0x000E => self.shl_vx(x, y),
+                            _ => {}
+                        }
+                    },
+                    0x9000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let y = ((instruction & 0x00F0) >> 4) as usize;
+                        self.sne_vx_vy(x, y);
+                    },
+                    0xA000 => self.ld_i_addr(instruction & 0x0FFF),
+                    0xB000 => self.jp_v0_addr(instruction & 0x0FFF),
+                    0xC000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let kk = (instruction & 0x00FF) as u8;
+                        self.rnd_vx_byte(x, kk);
+                    },
+                    0xD000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        let y = ((instruction & 0x00F0) >> 4) as usize;
+                        let n = (instruction & 0x000F) as u8;
+                        self.drw_vx_vy_nibble(x, y, n);
+                    },
+                    0xE000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        match instruction & 0x00FF {
+                            0x009E => self.skp_vx(x),
+                            0x00A1 => self.sknp_vx(x),
+                            _ => {}
+                        }
+                    },
+                    0xF000 => {
+                        let x = ((instruction & 0x0F00) >> 8) as usize;
+                        match instruction & 0x00FF {
+                            0x0007 => self.ld_vx_dt(x),
+                            0x000A => self.ld_vx_k(x),
+                            0x0015 => self.ld_dt_vx(x),
+                            0x0018 => self.ld_st_vx(x),
+                            0x001E => self.add_i_vx(x),
+                            0x0029 => self.ld_f_vx(x),
+                            0x0033 => self.ld_b_vx(x),
+                            0x0055 => self.ld_i_vx(x),
+                            0x0065 => self.ld_vx_i(x),
+                            _ => {}
+                        }
+                    },
+                    _ => panic!("unknown opcode {:#06X}", instruction)
+                }
+
             }
 
+            self.draw_flag = false;
             (self.render)(&self.display, &mut self.keypad);
 
-            sleep(self.clock_rate.period());
+            sleep(Duration::from_millis(1000/60));
         }
     }
 
