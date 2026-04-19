@@ -6,7 +6,7 @@ pub struct Chip8 {
     pub(crate) register: [u8; 16],
     pub(crate) index_register: u16,
 
-    pub(crate) stack: [u16; 32],
+    pub(crate) stack: [u16; 16],
     pub(crate) stack_pointer: u8,
 
     pub(crate) delay_timer: Timer,
@@ -21,6 +21,8 @@ pub struct Chip8 {
     pub(crate) display: [bool; 2048],
 
     pub(crate) render: Box<dyn FnMut(&[bool; 2048], &mut [bool; 16])>,
+
+    pub debug: bool,
 }
 
 const FONT: [u8; 80] = [
@@ -48,7 +50,7 @@ impl Chip8 {
             register: [0; 16],
             index_register: 0,
 
-            stack: [0; 32],
+            stack: [0; 16],
             stack_pointer: 0,
 
             delay_timer: Timer::new(),
@@ -63,9 +65,16 @@ impl Chip8 {
             display: [false; 2048],
 
             render: Box::new(|_,_| {}),
+
+            debug: false,
         };
+
         chip.ram[0x000..0x050].copy_from_slice(&FONT);
         chip
+    }
+
+    pub fn set_log(&mut self, log: bool) {
+        self.debug = log;
     }
 
     pub fn set_render(&mut self, func: impl FnMut(&[bool; 2048], &mut [bool; 16]) + 'static) {
@@ -86,11 +95,15 @@ impl Chip8 {
 
     pub fn start_program(&mut self) { //Will assume program loaded
         loop {
-            self.log_state();
+            //self.log_state();
 
             let instruction = self.get_instruction();
-            println!("Instruction: {:#06X}", instruction);
             self.program_counter += 2;
+
+            if self.debug {
+                println!("Instruction: {:#06X}", instruction);
+                self.log_state();
+            }
 
             match instruction & 0xF000 {
                 0x0000 => match instruction & 0x0FFF {

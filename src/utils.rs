@@ -15,7 +15,7 @@ impl Hertz {
     }
 
     pub fn set_frequency(&mut self, freq: u64) {
-        self.period = Duration::from_millis(1/freq * 1000);
+        self.period = Duration::from_millis(1000/freq);
     }
 }
 
@@ -26,12 +26,13 @@ pub(crate) struct Timer {
 impl Timer {
 
     pub fn new() -> Self {
-        Self { value: Arc::new(Mutex::new(0)) }
+        let mut timer = Timer { value: Arc::new(Mutex::new(0)) };
+        timer.start_timer_thread();
+        timer
     }
 
     pub fn activate(&mut self, value: u8) {
         *self.value.lock().unwrap() = value;
-        self.start_timer_thread();
     }
 
     fn start_timer_thread(&mut self) {

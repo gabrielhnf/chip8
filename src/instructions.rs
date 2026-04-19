@@ -62,16 +62,19 @@ impl Chip8 {
 
     pub(crate) fn or_vx_vy(&mut self, x: usize, y: usize) {
         self.register[x] |= self.register[y];
+        self.register[0xF] = 0;
     }
 
     // 8xy2 - AND Vx, Vy
     pub(crate) fn and_vx_vy(&mut self, x: usize, y: usize) {
         self.register[x] &= self.register[y];
+        self.register[0xF] = 0;
     }
 
     // 8xy3 - XOR Vx, Vy
     pub(crate) fn xor_vx_vy(&mut self, x: usize, y: usize) {
         self.register[x] ^= self.register[y];
+        self.register[0xF] = 0;
     }
 
     // 8xy4 - ADD Vx, Vy
