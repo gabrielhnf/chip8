@@ -59,6 +59,7 @@ impl Chip8 {
         println!("V:  {:?}", self.register); // your registers array
         println!("I:  {:#06X}", self.index_register);
         println!("SP: {}", self.stack_pointer);
+        println!("KEYPAD: {:?}", self.keypad);
         println!();
     }
 }

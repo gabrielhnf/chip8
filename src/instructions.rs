@@ -9,11 +9,12 @@ impl Chip8 {
     }
 
     pub(crate) fn cls(&mut self) {
+        self.display = [false; 2048];
     }
 
     pub(crate) fn ret(&mut self) {
-        self.program_counter = self.stack[self.stack_pointer as usize];
         self.stack_pointer -= 1;
+        self.program_counter = self.stack[self.stack_pointer as usize];
     }
 
     pub(crate) fn jmp(&mut self, location: u16) {
@@ -21,8 +22,11 @@ impl Chip8 {
     }
 
     pub(crate) fn call(&mut self, location: u16) {
-        self.stack_pointer += 1;
+        if self.stack_pointer as usize >= self.stack.len() {
+            panic!("Stack overflow! PC: {:#06X}", self.program_counter);
+        }
         self.stack[self.stack_pointer as usize] = self.program_counter;
+        self.stack_pointer += 1;
         self.program_counter = location;
     }
 
@@ -49,7 +53,7 @@ impl Chip8 {
     }
 
     pub(crate) fn add_vx_byte(&mut self, x: usize, byte: u8) {
-        self.register[x] += byte;
+        self.register[x] = self.register[x].wrapping_add(byte);
     }
 
     pub(crate) fn ld_vx_vy(&mut self, x: usize, y: usize) {

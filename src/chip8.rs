@@ -1,5 +1,4 @@
-use std::thread::sleep;
-use minifb::{Window, WindowOptions};
+use std::{fs, thread::sleep};
 use super::utils::{Hertz, Timer};
 
 #[allow(dead_code)]
@@ -20,11 +19,32 @@ pub struct Chip8 {
 
     pub(crate) keypad: [bool; 16],
     pub(crate) display: [bool; 2048],
+
+    pub(crate) render: Box<dyn FnMut(&[bool; 2048], &mut [bool; 16])>,
 }
+
+const FONT: [u8; 80] = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+];
 
 impl Chip8 {
     pub fn new() -> Self {
-        Self { 
+        let mut chip = Chip8 { 
             register: [0; 16],
             index_register: 0,
 
@@ -41,22 +61,35 @@ impl Chip8 {
 
             keypad: [false; 16],
             display: [false; 2048],
+
+            render: Box::new(|_,_| {}),
+        };
+        chip.ram[0x000..0x050].copy_from_slice(&FONT);
+        chip
+    }
+
+    pub fn set_render(&mut self, func: impl FnMut(&[bool; 2048], &mut [bool; 16]) + 'static) {
+        self.render = Box::new(func);
+    }
+
+    pub fn load_program(&mut self, path: &str) {
+        let rom = fs::read(path).unwrap();
+
+        //Read rom into ram from 0x200 (maybe rom will be array of u16)
+        let offset = 0x200;
+        for (index, instruction) in rom.iter().enumerate() {
+            self.ram[offset + index] = *instruction;
         }
+        //Set PC to 0x200
+        self.program_counter = offset as u16;
     }
 
     pub fn start_program(&mut self) { //Will assume program loaded
-        let mut window = Window::new("CHIP-8", 64, 32, WindowOptions {
-            scale: minifb::Scale::X8,
-            ..WindowOptions::default()
-        }).unwrap();
-
         loop {
-            //fetch -> read instruction from memory (2-byte instruction)
-            //decode -> decode instruction (using match)
-            //execute -> execute it inside proper match arm
             self.log_state();
 
             let instruction = self.get_instruction();
+            println!("Instruction: {:#06X}", instruction);
             self.program_counter += 2;
 
             match instruction & 0xF000 {
@@ -152,26 +185,13 @@ impl Chip8 {
                         _ => {}
                     }
                 },
-                _ => {}
+                _ => panic!("unknown opcode {:#06X}", instruction)
             }
 
-            let framebuffer: Vec<u32> = self.display.iter().map(|&px| {
-                if px { 0xFFFFFFFF } else { 0x00000000 }
-            }).collect();
+            (self.render)(&self.display, &mut self.keypad);
 
-            window.update_with_buffer(&framebuffer, 64, 32).unwrap();
             sleep(self.clock_rate.period());
         }
-    }
-
-    pub fn load_program(&mut self, rom: &[u8]) {
-        //Read rom into ram from 0x200 (maybe rom will be array of u16)
-        let offset = 0x200;
-        for (index, instruction) in rom.iter().enumerate() {
-            self.ram[offset + index] = *instruction;
-        }
-        //Set PC to 0x200
-        self.program_counter = offset as u16;
     }
 
 }
