@@ -1,20 +1,23 @@
 use std::thread::sleep;
 use minifb::{Window, WindowOptions};
-
-use super::utils::Hertz;
-
+use super::utils::{Hertz, Timer};
 
 #[allow(dead_code)]
 pub struct Chip8 {
     pub(crate) register: [u8; 16],
     pub(crate) index_register: u16,
+
     pub(crate) stack: [u16; 32],
     pub(crate) stack_pointer: u8,
-    pub(crate) delay_timer: u8,
-    pub(crate) sound_timer: u8,
+
+    pub(crate) delay_timer: Timer,
+    pub(crate) sound_timer: Timer,
+
     pub(crate) program_counter: u16,
     pub(crate) ram: [u8; 4096],
+
     pub(crate) clock_rate: Hertz,
+
     pub(crate) keypad: [bool; 16],
     pub(crate) display: [bool; 2048],
 }
@@ -24,13 +27,18 @@ impl Chip8 {
         Self { 
             register: [0; 16],
             index_register: 0,
+
             stack: [0; 32],
             stack_pointer: 0,
-            delay_timer: 0,
-            sound_timer: 0,
+
+            delay_timer: Timer::new(),
+            sound_timer: Timer::new(),
+
             program_counter: 0,
             ram: [0; 4096],
+
             clock_rate: Hertz::new(600),
+
             keypad: [false; 16],
             display: [false; 2048],
         }
@@ -156,14 +164,11 @@ impl Chip8 {
         }
     }
 
-    pub fn load_program(&mut self, rom: &[u16]) {
+    pub fn load_program(&mut self, rom: &[u8]) {
         //Read rom into ram from 0x200 (maybe rom will be array of u16)
         let offset = 0x200;
         for (index, instruction) in rom.iter().enumerate() {
-            let low_bits = *instruction as u8;
-            let high_bits = ((*instruction) >> 8) as u8;
-            self.ram[offset + 2*index] = high_bits;
-            self.ram[offset + 2*index + 1] = low_bits;
+            self.ram[offset + index] = *instruction;
         }
         //Set PC to 0x200
         self.program_counter = offset as u16;

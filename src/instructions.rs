@@ -161,7 +161,7 @@ impl Chip8 {
 
     // Fx07 - LD Vx, DT
     pub(crate) fn ld_vx_dt(&mut self, x: usize) {
-        self.register[x] = self.delay_timer;
+        self.register[x] = *self.delay_timer.value.lock().unwrap();
     }
 
     // Fx0A - LD Vx, K
@@ -174,12 +174,12 @@ impl Chip8 {
 
     // Fx15 - LD DT, Vx
     pub(crate) fn ld_dt_vx(&mut self, x: usize) {
-        self.delay_timer = self.register[x];
+        self.delay_timer.activate(self.register[x]);
     }
 
     // Fx18 - LD ST, Vx
     pub(crate) fn ld_st_vx(&mut self, x: usize) {
-        self.sound_timer = self.register[x];
+        self.sound_timer.activate(self.register[x]);
     }
 
     // Fx1E - ADD I, Vx
@@ -195,9 +195,9 @@ impl Chip8 {
     // Fx33 - LD B, Vx
     pub(crate) fn ld_b_vx(&mut self, x: usize) {
         let vx = self.register[x];
-        self.ram[self.index_register as usize]       = (vx / 100);
-        self.ram[self.index_register as usize + 1]   = ((vx % 100) / 10);
-        self.ram[self.index_register as usize + 2]   = (vx % 10);
+        self.ram[self.index_register as usize]       = vx / 100;
+        self.ram[self.index_register as usize + 1]   = (vx % 100) / 10;
+        self.ram[self.index_register as usize + 2]   = vx % 10;
     }
 
     // Fx55 - LD [I], Vx

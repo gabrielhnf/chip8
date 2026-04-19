@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::{Arc, Mutex}, thread, time::Duration};
 use super::Chip8;
 
 pub struct Hertz {
@@ -16,6 +16,35 @@ impl Hertz {
 
     pub fn set_frequency(&mut self, freq: u64) {
         self.period = Duration::from_millis(1/freq * 1000);
+    }
+}
+
+pub(crate) struct Timer {
+    pub(crate) value: Arc<Mutex<u8>>,
+}
+
+impl Timer {
+
+    pub fn new() -> Self {
+        Self { value: Arc::new(Mutex::new(0)) }
+    }
+
+    pub fn activate(&mut self, value: u8) {
+        *self.value.lock().unwrap() = value;
+        self.start_timer_thread();
+    }
+
+    fn start_timer_thread(&mut self) {
+        let value = Arc::clone(&self.value);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_millis(16));
+                let mut v = value.lock().unwrap();
+                if *v > 0 {
+                    *v -= 1;
+                }
+            }
+        });
     }
 }
 
